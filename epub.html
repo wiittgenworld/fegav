@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB to DOCX Converter (Con Imágenes)</title>
+    <title>Convertidor EPUB a DOCX (Imágenes Corregidas)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -21,7 +21,7 @@
             padding: 2rem 3rem;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 400px;
+            max-width: 500px;
             width: 100%;
         }
         h1 { margin-bottom: 1.5rem; font-size: 1.5rem; }
@@ -43,15 +43,8 @@
             color: #007bff;
         }
 
-        .drop-icon {
-            font-size: 3rem;
-            display: block;
-            margin-bottom: 10px;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
+        .drop-icon { font-size: 3rem; display: block; margin-bottom: 10px; }
+        input[type="file"] { display: none; }
         
         .custom-upload-btn {
             display: inline-block;
@@ -62,7 +55,6 @@
             cursor: pointer;
             transition: background 0.3s;
             font-weight: 500;
-            width: auto;
         }
         .custom-upload-btn:hover { background-color: #0056b3; }
         
@@ -72,6 +64,9 @@
             min-height: 1.2em;
             color: #666;
             word-wrap: break-word;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
         }
         .spinner {
             display: inline-block;
@@ -88,7 +83,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 
-    <!-- Essential Libraries -->
+    <!-- Librerías -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
@@ -97,17 +92,15 @@
 <body>
 
     <div class="container">
-        <h1>EPUB a DOCX</h1>
+        <h1>EPUB a DOCX v2</h1>
         
         <div id="dropZone" class="drop-area">
-            <span class="drop-icon">📂</span>
+            <span class="drop-icon">🖼️</span>
             <span>Arrastra tu EPUB aquí</span>
         </div>
 
         <div>
-            <label for="fileInput" class="custom-upload-btn">
-                Seleccionar Archivo
-            </label>
+            <label for="fileInput" class="custom-upload-btn">Seleccionar Archivo</label>
             <input type="file" id="fileInput" accept=".epub">
         </div>
 
@@ -123,8 +116,8 @@
         const spinner = document.getElementById('spinner');
         const dropZone = document.getElementById('dropZone');
 
-        // Función auxiliar: Convertir Blob a Base64
-        const blobToBase64 = (blob) => {
+        // Convierte Blob a cadena Base64 (DataURL)
+        const blobToDataURL = (blob) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result);
@@ -136,140 +129,145 @@
         const processFile = async (file) => {
             if (!file) return;
             
+            // Validación simple
             if (file.type !== "application/epub+zip" && !file.name.toLowerCase().endsWith('.epub')) {
-                statusText.textContent = "Error: Por favor sube un archivo .epub válido.";
+                statusText.textContent = "Error: Sube un archivo .epub válido.";
                 return;
             }
 
             spinner.style.display = 'inline-block';
-            statusText.textContent = "Leyendo estructura del EPUB...";
+            statusText.textContent = "Analizando EPUB...";
             
             try {
                 const buffer = await file.arrayBuffer();
                 const book = ePub(buffer);
-                
                 await book.ready;
-                statusText.textContent = "Extrayendo contenido e imágenes...";
 
-                const spine = book.spine;
-                
-                // Estilos CSS básicos para asegurar que las imágenes no sean gigantes en Word
+                // Estructura base del HTML para Word
                 let fullHtml = `
                     <!DOCTYPE html>
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
                     <head>
                         <meta charset='utf-8'>
+                        <title>${book.package.metadata.title || 'Documento'}</title>
                         <style>
-                            img { max-width: 100%; height: auto; }
-                            body { font-family: 'Times New Roman', serif; }
+                            body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; }
+                            img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
+                            p { margin-bottom: 10px; }
                         </style>
                     </head>
                     <body>
                 `;
 
+                const spine = book.spine;
+                let count = 0;
+
                 for (const item of spine.items) {
-                    statusText.textContent = `Procesando cap. ${item.index + 1} de ${spine.items.length} (incluyendo imágenes)...`;
+                    count++;
+                    statusText.textContent = `Procesando Cap ${count}/${spine.items.length}...`;
 
-                    try {
-                        const doc = await book.load(item.href);
+                    // Cargar el documento del capítulo
+                    const doc = await book.load(item.href);
 
-                        if (doc instanceof Document) {
-                            // --- LÓGICA DE IMÁGENES AÑADIDA AQUÍ ---
-                            
-                            // 1. Encontrar todas las imágenes en este capítulo
-                            const images = Array.from(doc.querySelectorAll('img'));
-                            const imagePromises = images.map(async (img) => {
-                                const src = img.getAttribute('src');
-                                if (src) {
-                                    try {
-                                        // 2. Resolver la ruta absoluta dentro del ZIP del EPUB
-                                        const absolutePath = book.path.resolve(src, item.href);
-                                        
-                                        // 3. Obtener el archivo de imagen del archivo comprimido
-                                        const imageBlob = await book.archive.getBlob(absolutePath);
-                                        
-                                        if (imageBlob) {
-                                            // 4. Convertir a Base64
-                                            const base64 = await blobToBase64(imageBlob);
-                                            // 5. Reemplazar el src relativo con los datos Base64
+                    if (doc instanceof Document) {
+                        // === PROCESAMIENTO DE IMÁGENES CRÍTICO ===
+                        const images = Array.from(doc.querySelectorAll('img'));
+                        
+                        // Procesamos las imágenes en serie para no saturar la memoria
+                        for (const img of images) {
+                            const src = img.getAttribute('src');
+                            if (src) {
+                                try {
+                                    // 1. Resolver ruta absoluta dentro del ZIP
+                                    // 'item.href' es la ruta del archivo HTML actual (ej: OEBPS/Text/cap1.html)
+                                    // 'src' es la ruta de la imagen relativa (ej: ../Images/foto.jpg)
+                                    const absolutePath = book.path.resolve(src, item.href);
+
+                                    // 2. Extraer el binario (Blob) directamente del ZIP
+                                    const imageBlob = await book.archive.getBlob(absolutePath);
+
+                                    if (imageBlob) {
+                                        // 3. Validar tipo MIME (Word odia SVG a veces, pero aceptamos los comunes)
+                                        if (imageBlob.type.startsWith('image/')) {
+                                            const base64 = await blobToDataURL(imageBlob);
+                                            
+                                            // 4. Inyectar Base64 en el HTML
                                             img.setAttribute('src', base64);
+                                            
+                                            // 5. Truco para Word: Eliminar width/height fijos si rompen el aspecto,
+                                            // o forzar estilos para que Word no ponga cuadros vacíos
+                                            img.style.maxWidth = "500px"; 
+                                            img.removeAttribute('height'); // Dejar que el aspect-ratio lo maneje
+                                        } else {
+                                            console.warn("Tipo de imagen no soportado:", imageBlob.type);
                                         }
-                                    } catch (imgErr) {
-                                        console.warn(`No se pudo cargar la imagen: ${src}`, imgErr);
+                                    } else {
+                                        console.warn(`Imagen no encontrada en el ZIP: ${absolutePath}`);
+                                        img.alt = "[Imagen no encontrada]";
                                     }
+                                } catch (e) {
+                                    console.error(`Error procesando imagen ${src}:`, e);
+                                    img.alt = "[Error de imagen]";
                                 }
-                            });
-
-                            // Esperar a que todas las imágenes del capítulo se procesen
-                            await Promise.all(imagePromises);
-                            // ------------------------------------------
-
-                            const bodyContent = doc.body.innerHTML;
-                            fullHtml += bodyContent;
-                            fullHtml += '<br style="page-break-after: always;" />';
+                            }
                         }
-                    } catch (chapterError) {
-                        console.warn("Saltando capítulo por error:", chapterError);
+                        
+                        // Añadir contenido limpio al HTML final
+                        // Usamos XMLSerializer para asegurar etiquetas bien cerradas (importante para Word)
+                        const serializer = new XMLSerializer();
+                        const bodyContent = serializer.serializeToString(doc.body);
+                        
+                        // Eliminar las etiquetas <body> envolventes que trae el serializer
+                        const cleanContent = bodyContent.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '');
+
+                        fullHtml += cleanContent;
+                        fullHtml += '<br style="page-break-after: always;" />';
                     }
                 }
 
                 fullHtml += "</body></html>";
 
-                statusText.textContent = "Generando documento Word...";
-                
-                await new Promise(r => setTimeout(r, 100)); // Breve pausa para actualizar UI
+                statusText.textContent = "Generando archivo .docx (esto puede tardar unos segundos)...";
+                await new Promise(r => setTimeout(r, 200));
 
+                // Configuración de html-docx-js
                 const converted = htmlDocx.asBlob(fullHtml, {
                     orientation: 'portrait',
-                    margins: { top: 720, bottom: 720, left: 720, right: 720 }
+                    margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 } // Tweeps (1440 = 1 pulgada)
                 });
 
-                const newFilename = file.name.replace(/\.epub$/i, '') + ".docx";
-                saveAs(converted, newFilename);
+                const filename = (book.package.metadata.title || "ebook") + ".docx";
+                saveAs(converted, filename);
                 
-                statusText.textContent = "¡Listo! Descarga iniciada.";
+                statusText.textContent = "¡Éxito! Archivo descargado.";
 
             } catch (err) {
                 console.error(err);
-                statusText.textContent = "Error: " + err.message;
+                statusText.textContent = "Error Grave: " + err.message;
             } finally {
                 spinner.style.display = 'none';
                 fileInput.value = ''; 
             }
         };
 
-        // Eventos
-        fileInput.addEventListener('change', (e) => {
-            processFile(e.target.files[0]);
-        });
-
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
+        // --- Event Listeners ---
+        fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
+        dropZone.addEventListener('click', () => fileInput.click());
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
         });
 
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
-        });
+        ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('drag-over')));
+        ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over')));
 
         dropZone.addEventListener('drop', (e) => {
             const dt = e.dataTransfer;
-            const files = dt.files;
-            processFile(files[0]);
+            processFile(dt.files[0]);
         });
-
     </script>
 </body>
 </html>
