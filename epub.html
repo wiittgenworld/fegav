@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB to DOCX (Smart Sizing)</title>
+    <title>EPUB to DOCX (Fixed Dimensions)</title>
     <style>
         body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; color: #333; }
         .container { text-align: center; background: white; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
@@ -76,34 +76,41 @@
                         const blob = await zipFile.async("blob");
                         const base64Data = await zipFile.async("base64");
                         
-                        // 3. Measure the image dimensions!
-                        // We use createImageBitmap (modern browsers) to get the width quickly
+                        // 3. Measure the image dimensions using Bitmap
                         const bmp = await createImageBitmap(blob);
-                        const naturalWidth = bmp.width;
+                        let naturalWidth = bmp.width;
+                        let naturalHeight = bmp.height;
 
                         // 4. Construct Data URI
                         const mimeType = getMimeType(foundKey);
                         const dataUri = `data:${mimeType};base64,${base64Data}`;
 
-                        // 5. Update the Image Tag
                         img.setAttribute('src', dataUri);
                         
-                        // Reset attributes that might cause distortion
-                        img.removeAttribute('height');
-                        img.removeAttribute('width');
+                        // ---------------------------------------------------------
+                        // THE FIX: HARD MATH INSTEAD OF CSS
+                        // ---------------------------------------------------------
+                        const MAX_WORD_WIDTH = 600; // Safe width for A4/Letter margins
 
-                        // 6. INTELLIGENT SIZING LOGIC
-                        // Standard Word page printable width is approx 600px - 650px.
-                        if (naturalWidth > 600) {
-                            // If it's big (Cover, Full Page), force it to fit the page width
-                            // Word respects 'width: 100%' in style more than max-width
-                            img.style.width = "100%";
-                            img.style.height = "auto"; 
-                        } else {
-                            // If it's small (icon, separator), let it be its natural size
-                            img.style.width = "auto";
-                            img.style.height = "auto";
+                        let finalWidth = naturalWidth;
+                        let finalHeight = naturalHeight;
+
+                        if (naturalWidth > MAX_WORD_WIDTH) {
+                            // Calculate the scaling ratio
+                            const ratio = MAX_WORD_WIDTH / naturalWidth;
+                            
+                            // Apply ratio to dimensions
+                            finalWidth = MAX_WORD_WIDTH;
+                            finalHeight = Math.round(naturalHeight * ratio);
                         }
+
+                        // Apply BOTH attributes (for Word's drawing engine) AND styles (for Web view)
+                        img.setAttribute('width', finalWidth);
+                        img.setAttribute('height', finalHeight);
+                        
+                        img.style.width = finalWidth + 'px';
+                        img.style.height = finalHeight + 'px';
+                        img.style.maxWidth = "100%"; // Just in case
                         
                     } else {
                         console.warn(`File not found in archive: ${filename}`);
@@ -125,7 +132,7 @@
                 const book = ePub(buffer);
                 await book.ready;
 
-                // We add a basic CSS block for Word, but the inline styles in JS matter more
+                // Removed global CSS for images since we are now hard-coding inline styles
                 let fullHtml = `
                     <!DOCTYPE html>
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
