@@ -3,87 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Convertidor EPUB a DOCX (Imágenes Corregidas)</title>
+    <title>EPUB a DOCX - Corrección de Imágenes</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
+            padding: 20px;
             background-color: #f4f4f9;
             color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         .container {
-            text-align: center;
             background: white;
-            padding: 2rem 3rem;
+            padding: 2rem;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 500px;
+            max-width: 600px;
             width: 100%;
+            text-align: center;
         }
-        h1 { margin-bottom: 1.5rem; font-size: 1.5rem; }
-        
         .drop-area {
             border: 2px dashed #ccc;
             border-radius: 12px;
-            padding: 40px 20px;
+            padding: 30px;
             background-color: #fafafa;
-            margin-bottom: 20px;
+            margin: 20px 0;
             cursor: pointer;
             transition: all 0.3s ease;
-            color: #777;
         }
-        
-        .drop-area.drag-over, .drop-area:hover {
-            border-color: #007bff;
-            background-color: #f0f8ff;
-            color: #007bff;
-        }
-
+        .drop-area:hover { border-color: #007bff; background-color: #f0f8ff; }
         .drop-icon { font-size: 3rem; display: block; margin-bottom: 10px; }
-        input[type="file"] { display: none; }
         
         .custom-upload-btn {
-            display: inline-block;
-            background-color: #007bff;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.3s;
-            font-weight: 500;
+            background-color: #007bff; color: white; padding: 10px 25px;
+            border-radius: 6px; cursor: pointer; display: inline-block;
         }
         .custom-upload-btn:hover { background-color: #0056b3; }
+        input[type="file"] { display: none; }
+
+        /* Estilos para la barra de progreso y estado */
+        #status-container { margin-top: 20px; text-align: left; font-size: 0.9rem; }
+        #statusText { display: block; margin-bottom: 5px; font-weight: bold; }
+        .log-entry { font-family: monospace; font-size: 0.8em; color: #666; border-bottom: 1px solid #eee; padding: 2px 0; }
         
-        #status {
-            margin-top: 1.5rem;
-            font-size: 0.9rem;
-            min-height: 1.2em;
-            color: #666;
-            word-wrap: break-word;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 4px;
-        }
-        .spinner {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(0,0,0,0.1);
-            border-left-color: #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
+        /* Debug Preview Area */
+        #preview {
+            margin-top: 30px;
+            border-top: 2px solid #ddd;
+            padding-top: 20px;
+            width: 100%;
+            text-align: left;
             display: none;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #preview h3 { margin-top: 0; }
+        .preview-content { max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 10px; }
+        .preview-content img { max-width: 100px; border: 1px solid red; } /* Borde rojo para detectar imágenes */
     </style>
 
-    <!-- Librerías -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
@@ -92,182 +70,226 @@
 <body>
 
     <div class="container">
-        <h1>EPUB a DOCX v2</h1>
+        <h1>EPUB a DOCX (Sanitizador de Imágenes)</h1>
+        <p style="font-size: 0.8rem; color: #666;">Convierte imágenes a JPG estándar para evitar la "X" roja.</p>
         
         <div id="dropZone" class="drop-area">
-            <span class="drop-icon">🖼️</span>
+            <span class="drop-icon">📚</span>
             <span>Arrastra tu EPUB aquí</span>
         </div>
 
-        <div>
-            <label for="fileInput" class="custom-upload-btn">Seleccionar Archivo</label>
-            <input type="file" id="fileInput" accept=".epub">
+        <label for="fileInput" class="custom-upload-btn">Seleccionar Archivo</label>
+        <input type="file" id="fileInput" accept=".epub">
+
+        <div id="status-container">
+            <span id="statusText">Esperando archivo...</span>
+            <div id="logArea"></div>
         </div>
 
-        <div id="status">
-            <div class="spinner" id="spinner"></div>
-            <span id="statusText">Esperando archivo...</span>
+        <!-- Área oculta para previsualizar si el script realmente encontró las imágenes -->
+        <div id="preview">
+            <h3>Vista Previa de Extracción (Último Cap.):</h3>
+            <div class="preview-content" id="previewContent"></div>
         </div>
     </div>
 
     <script>
         const fileInput = document.getElementById('fileInput');
         const statusText = document.getElementById('statusText');
-        const spinner = document.getElementById('spinner');
+        const logArea = document.getElementById('logArea');
         const dropZone = document.getElementById('dropZone');
+        const previewContent = document.getElementById('previewContent');
+        const previewBox = document.getElementById('preview');
 
-        // Convierte Blob a cadena Base64 (DataURL)
-        const blobToDataURL = (blob) => {
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.textContent = msg;
+            logArea.prepend(div);
+            // Limitar logs
+            if (logArea.children.length > 5) logArea.lastChild.remove();
+        }
+
+        // --- FUNCIÓN CLAVE: Convierte cualquier Blob a un JPG Base64 limpio usando Canvas ---
+        const blobToCleanJpg = (blob) => {
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
+                const img = new Image();
+                const url = URL.createObjectURL(blob);
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    // Usamos las dimensiones naturales
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    
+                    const ctx = canvas.getContext('2d');
+                    // Fondo blanco por si es un PNG transparente (Word odia transparencias a veces)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Exportar como JPEG calidad 0.8
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    URL.revokeObjectURL(url);
+                    resolve({ 
+                        dataUrl, 
+                        width: img.naturalWidth, 
+                        height: img.naturalHeight 
+                    });
+                };
+                
+                img.onerror = (e) => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("No se pudo decodificar la imagen en Canvas"));
+                };
+                
+                img.src = url;
             });
         };
 
         const processFile = async (file) => {
             if (!file) return;
-            
-            // Validación simple
-            if (file.type !== "application/epub+zip" && !file.name.toLowerCase().endsWith('.epub')) {
-                statusText.textContent = "Error: Sube un archivo .epub válido.";
+            logArea.innerHTML = '';
+            previewContent.innerHTML = '';
+            previewBox.style.display = 'block';
+
+            if (!file.name.toLowerCase().endsWith('.epub')) {
+                statusText.textContent = "Por favor usa un archivo .epub";
                 return;
             }
 
-            spinner.style.display = 'inline-block';
-            statusText.textContent = "Analizando EPUB...";
+            statusText.textContent = "Abriendo libro...";
             
             try {
                 const buffer = await file.arrayBuffer();
                 const book = ePub(buffer);
                 await book.ready;
 
-                // Estructura base del HTML para Word
                 let fullHtml = `
                     <!DOCTYPE html>
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
                     <head>
                         <meta charset='utf-8'>
-                        <title>${book.package.metadata.title || 'Documento'}</title>
-                        <style>
-                            body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; }
-                            img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
-                            p { margin-bottom: 10px; }
-                        </style>
+                        <title>${book.package.metadata.title || 'Ebook'}</title>
                     </head>
                     <body>
                 `;
 
                 const spine = book.spine;
-                let count = 0;
+                let totalImagesProcessed = 0;
 
-                for (const item of spine.items) {
-                    count++;
-                    statusText.textContent = `Procesando Cap ${count}/${spine.items.length}...`;
+                for (let i = 0; i < spine.items.length; i++) {
+                    const item = spine.items[i];
+                    statusText.textContent = `Procesando capítulo ${i + 1} de ${spine.items.length}...`;
+                    
+                    try {
+                        const doc = await book.load(item.href);
+                        if (!(doc instanceof Document)) continue;
 
-                    // Cargar el documento del capítulo
-                    const doc = await book.load(item.href);
-
-                    if (doc instanceof Document) {
-                        // === PROCESAMIENTO DE IMÁGENES CRÍTICO ===
+                        // Encontrar imágenes
                         const images = Array.from(doc.querySelectorAll('img'));
                         
-                        // Procesamos las imágenes en serie para no saturar la memoria
+                        // Procesar imágenes de este capítulo
                         for (const img of images) {
                             const src = img.getAttribute('src');
-                            if (src) {
-                                try {
-                                    // 1. Resolver ruta absoluta dentro del ZIP
-                                    // 'item.href' es la ruta del archivo HTML actual (ej: OEBPS/Text/cap1.html)
-                                    // 'src' es la ruta de la imagen relativa (ej: ../Images/foto.jpg)
-                                    const absolutePath = book.path.resolve(src, item.href);
+                            if (!src) continue;
 
-                                    // 2. Extraer el binario (Blob) directamente del ZIP
-                                    const imageBlob = await book.archive.getBlob(absolutePath);
+                            try {
+                                const absolutePath = book.path.resolve(src, item.href);
+                                const imageBlob = await book.archive.getBlob(absolutePath);
 
-                                    if (imageBlob) {
-                                        // 3. Validar tipo MIME (Word odia SVG a veces, pero aceptamos los comunes)
-                                        if (imageBlob.type.startsWith('image/')) {
-                                            const base64 = await blobToDataURL(imageBlob);
-                                            
-                                            // 4. Inyectar Base64 en el HTML
-                                            img.setAttribute('src', base64);
-                                            
-                                            // 5. Truco para Word: Eliminar width/height fijos si rompen el aspecto,
-                                            // o forzar estilos para que Word no ponga cuadros vacíos
-                                            img.style.maxWidth = "500px"; 
-                                            img.removeAttribute('height'); // Dejar que el aspect-ratio lo maneje
-                                        } else {
-                                            console.warn("Tipo de imagen no soportado:", imageBlob.type);
-                                        }
-                                    } else {
-                                        console.warn(`Imagen no encontrada en el ZIP: ${absolutePath}`);
-                                        img.alt = "[Imagen no encontrada]";
+                                if (imageBlob) {
+                                    addLog(`Img encontrada: ${src.substring(0, 20)}...`);
+                                    
+                                    // 1. Convertir a JPG limpio
+                                    const { dataUrl, width, height } = await blobToCleanJpg(imageBlob);
+                                    
+                                    // 2. Reemplazar SRC
+                                    img.setAttribute('src', dataUrl);
+                                    
+                                    // 3. FIX CRÍTICO: Establecer width/height explícitos para Word
+                                    // Si es muy grande, lo limitamos
+                                    let finalWidth = width;
+                                    let finalHeight = height;
+                                    
+                                    if (width > 600) {
+                                        const ratio = 600 / width;
+                                        finalWidth = 600;
+                                        finalHeight = Math.round(height * ratio);
                                     }
-                                } catch (e) {
-                                    console.error(`Error procesando imagen ${src}:`, e);
-                                    img.alt = "[Error de imagen]";
+
+                                    img.setAttribute('width', finalWidth);
+                                    img.setAttribute('height', finalHeight);
+                                    
+                                    // Estilo inline como respaldo
+                                    img.style.width = finalWidth + 'px';
+                                    img.style.height = 'auto';
+
+                                    totalImagesProcessed++;
+                                } else {
+                                    addLog(`⚠️ Blob vacío para: ${absolutePath}`);
                                 }
+                            } catch (imgErr) {
+                                console.warn("Error img", imgErr);
+                                addLog(`❌ Error procesando img: ${src}`);
                             }
                         }
-                        
-                        // Añadir contenido limpio al HTML final
-                        // Usamos XMLSerializer para asegurar etiquetas bien cerradas (importante para Word)
-                        const serializer = new XMLSerializer();
-                        const bodyContent = serializer.serializeToString(doc.body);
-                        
-                        // Eliminar las etiquetas <body> envolventes que trae el serializer
-                        const cleanContent = bodyContent.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '');
 
-                        fullHtml += cleanContent;
+                        // Serializar HTML limpio
+                        const serializer = new XMLSerializer();
+                        let bodyContent = serializer.serializeToString(doc.body);
+                        
+                        // Limpiar tags body para concatenar
+                        bodyContent = bodyContent.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '');
+                        
+                        fullHtml += bodyContent;
                         fullHtml += '<br style="page-break-after: always;" />';
+
+                        // Actualizar vista previa (solo el último capítulo procesado para no saturar)
+                        if (images.length > 0) {
+                            previewContent.innerHTML = `<b>Capítulo ${i+1}:</b><br>` + bodyContent;
+                        }
+
+                    } catch (e) {
+                        console.error(e);
                     }
                 }
 
                 fullHtml += "</body></html>";
 
-                statusText.textContent = "Generando archivo .docx (esto puede tardar unos segundos)...";
-                await new Promise(r => setTimeout(r, 200));
+                statusText.textContent = `Generando DOCX (${totalImagesProcessed} imágenes procesadas)...`;
+                
+                // Pequeña pausa para que el UI se actualice
+                await new Promise(r => setTimeout(r, 500));
 
-                // Configuración de html-docx-js
                 const converted = htmlDocx.asBlob(fullHtml, {
                     orientation: 'portrait',
-                    margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 } // Tweeps (1440 = 1 pulgada)
+                    margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 }
                 });
 
-                const filename = (book.package.metadata.title || "ebook") + ".docx";
+                const filename = (book.package.metadata.title || "ebook_convertido") + ".docx";
                 saveAs(converted, filename);
                 
-                statusText.textContent = "¡Éxito! Archivo descargado.";
+                statusText.textContent = "¡Descarga lista! Revisa tu carpeta.";
+                addLog("Proceso finalizado con éxito.");
 
             } catch (err) {
                 console.error(err);
-                statusText.textContent = "Error Grave: " + err.message;
+                statusText.textContent = "Error General: " + err.message;
             } finally {
-                spinner.style.display = 'none';
-                fileInput.value = ''; 
+                fileInput.value = '';
             }
         };
 
-        // --- Event Listeners ---
+        // Event Listeners
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         dropZone.addEventListener('click', () => fileInput.click());
-
+        
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, false);
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
         });
-
-        ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('drag-over')));
-        ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over')));
-
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            processFile(dt.files[0]);
-        });
+        dropZone.addEventListener('drop', (e) => processFile(e.dataTransfer.files[0]));
     </script>
 </body>
 </html>
