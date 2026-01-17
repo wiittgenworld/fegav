@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB to DOCX Converter (Fixed Images)</title>
+    <title>EPUB to DOCX (Smart Image Fix)</title>
     <style>
-        /* ... (Your existing CSS remains the same) ... */
         body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; color: #333; }
         .container { text-align: center; background: white; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
         .drop-area { border: 2px dashed #ccc; border-radius: 12px; padding: 40px 20px; background-color: #fafafa; margin-bottom: 20px; cursor: pointer; color: #777; }
         .drop-area:hover { border-color: #007bff; background-color: #f0f8ff; color: #007bff; }
         .custom-upload-btn { display: inline-block; background-color: #007bff; color: white; padding: 12px 30px; border-radius: 6px; cursor: pointer; }
-        #status { margin-top: 1.5rem; font-size: 0.9rem; color: #666; }
+        #status { margin-top: 1.5rem; font-size: 0.9rem; color: #666; word-wrap: break-word;}
         input[type="file"] { display: none; }
     </style>
 
-    <!-- Essential Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
@@ -43,25 +41,44 @@
         const statusText = document.getElementById('statusText');
         const dropZone = document.getElementById('dropZone');
 
-        // --- NEW HELPER FUNCTION TO HANDLE IMAGES ---
-        async function convertImagesToBase64(doc, book) {
+        // --- SMART IMAGE FINDER ---
+        async function convertImagesToBase64(doc, book, chapterHref) {
             const images = doc.querySelectorAll('img');
             
-            // Loop through every image tag found in the chapter
             for (let img of images) {
-                const src = img.getAttribute('src');
+                let src = img.getAttribute('src');
                 if (!src) continue;
 
+                // Cleanup source string (remove spaces, etc)
+                src = decodeURIComponent(src);
+                const filename = src.split('/').pop(); // Get just "cover.jpg"
+
                 try {
-                    // 1. Resolve the relative path (e.g., "../img/cover.jpg") to the internal file path
-                    // doc.baseURI is crucial here as it tells us where the current chapter file lives
-                    const absolutePath = book.path.resolve(src, doc.baseURI);
+                    let url = null;
+
+                    // ATTEMPT 1: Strict Path Resolution (The "Correct" way)
+                    // We calculate where the image *should* be relative to the chapter
+                    let absolutePath = book.path.resolve(src, chapterHref);
                     
-                    // 2. Fetch the image file from the EPUB archive
-                    // 'book.archive.createUrl' creates a temporary Blob URL that the browser can read
-                    const url = await book.archive.createUrl(absolutePath);
+                    // Check if file exists in the Zip archive at that exact spot
+                    if (book.archive.zip.files[absolutePath]) {
+                        url = await book.archive.createUrl(absolutePath);
+                    } 
                     
-                    // 3. Fetch that blob and convert it to Base64
+                    // ATTEMPT 2: Fuzzy Search (The "Fallback" way)
+                    // If Attempt 1 failed, look for ANY file ending with "cover.jpg" in the zip
+                    if (!url) {
+                        console.log(`Path lookup failed for ${src}, trying fuzzy search...`);
+                        for (let key in book.archive.zip.files) {
+                            if (key.endsWith(filename)) {
+                                console.log(`Found image at: ${key}`);
+                                url = await book.archive.createUrl(key);
+                                break;
+                            }
+                        }
+                    }
+
+                    // If we found it (either way), convert to Base64
                     if (url) {
                         const response = await fetch(url);
                         const blob = await response.blob();
@@ -71,14 +88,17 @@
                             reader.readAsDataURL(blob);
                         });
 
-                        // 4. Replace the src with the Base64 data
                         img.setAttribute('src', base64);
+                        img.setAttribute('width', '500'); // Force standard width for Word
+                        img.style.maxWidth = "100%";
                         
-                        // Clean up memory
                         URL.revokeObjectURL(url);
+                    } else {
+                        console.warn(`Could not find image anywhere in EPUB: ${filename}`);
                     }
+
                 } catch (err) {
-                    console.warn(`Could not process image: ${src}`, err);
+                    console.warn(`Error processing image ${src}:`, err);
                 }
             }
             return doc;
@@ -93,21 +113,25 @@
                 const book = ePub(buffer);
                 await book.ready;
 
-                let fullHtml = `<!DOCTYPE html><html><body>`;
+                let fullHtml = `
+                    <!DOCTYPE html>
+                    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+                    <head><meta charset='utf-8'><title>${book.package.metadata.title}</title></head>
+                    <body>
+                `;
+                
                 const spine = book.spine;
 
                 for (const item of spine.items) {
                     statusText.textContent = `Processing section ${item.index + 1} of ${spine.items.length}...`;
 
                     try {
-                        // Load the chapter Document
                         let doc = await book.load(item.href);
 
-                        // --- NEW: Run the image converter before getting HTML ---
                         if (doc instanceof Document) {
-                            await convertImagesToBase64(doc, book);
+                            // Run the Smart Image Finder
+                            await convertImagesToBase64(doc, book, item.href);
                             
-                            // Now extract the HTML *after* images are fixed
                             fullHtml += doc.body.innerHTML;
                             fullHtml += '<br style="page-break-after: always;" />';
                         }
@@ -119,13 +143,15 @@
                 fullHtml += "</body></html>";
 
                 statusText.textContent = "Generating Word document...";
+                await new Promise(r => setTimeout(r, 50));
+
                 const converted = htmlDocx.asBlob(fullHtml, {
                     orientation: 'portrait',
                     margins: { top: 720, bottom: 720, left: 720, right: 720 }
                 });
 
                 saveAs(converted, file.name.replace(/\.epub$/i, '') + ".docx");
-                statusText.textContent = "Done!";
+                statusText.textContent = "Done! Check your downloads.";
 
             } catch (err) {
                 console.error(err);
@@ -135,7 +161,6 @@
             }
         };
 
-        // Event Listeners (Same as before)
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         dropZone.addEventListener('click', () => fileInput.click());
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
