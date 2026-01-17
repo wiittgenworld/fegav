@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB a DOCX - Corrección de Imágenes</title>
+    <title>EPUB to DOCX (Local Embed Fix)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -43,23 +44,24 @@
         .custom-upload-btn:hover { background-color: #0056b3; }
         input[type="file"] { display: none; }
 
-        /* Estilos para la barra de progreso y estado */
-        #status-container { margin-top: 20px; text-align: left; font-size: 0.9rem; }
-        #statusText { display: block; margin-bottom: 5px; font-weight: bold; }
-        .log-entry { font-family: monospace; font-size: 0.8em; color: #666; border-bottom: 1px solid #eee; padding: 2px 0; }
+        #status-container { margin-top: 20px; text-align: left; font-size: 0.9rem; width: 100%; }
+        #statusText { display: block; margin-bottom: 5px; font-weight: bold; text-align: center; }
         
-        /* Debug Preview Area */
-        #preview {
-            margin-top: 30px;
-            border-top: 2px solid #ddd;
-            padding-top: 20px;
-            width: 100%;
-            text-align: left;
-            display: none;
+        /* Console Log Simulation */
+        #logArea {
+            background: #222;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 4px;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 0.8em;
+            margin-top: 10px;
         }
-        #preview h3 { margin-top: 0; }
-        .preview-content { max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 10px; }
-        .preview-content img { max-width: 100px; border: 1px solid red; } /* Borde rojo para detectar imágenes */
+        .log-entry { border-bottom: 1px solid #444; padding: 2px 0; }
+        .log-warn { color: #ff0; }
+        .log-error { color: #f00; }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -70,26 +72,20 @@
 <body>
 
     <div class="container">
-        <h1>EPUB a DOCX (Sanitizador de Imágenes)</h1>
-        <p style="font-size: 0.8rem; color: #666;">Convierte imágenes a JPG estándar para evitar la "X" roja.</p>
+        <h1>EPUB to DOCX Converter</h1>
+        <p>Fixes 404 errors by embedding local images.</p>
         
         <div id="dropZone" class="drop-area">
-            <span class="drop-icon">📚</span>
-            <span>Arrastra tu EPUB aquí</span>
+            <span class="drop-icon">📂</span>
+            <span>Drag & Drop EPUB here</span>
         </div>
 
-        <label for="fileInput" class="custom-upload-btn">Seleccionar Archivo</label>
+        <label for="fileInput" class="custom-upload-btn">Select File</label>
         <input type="file" id="fileInput" accept=".epub">
 
         <div id="status-container">
-            <span id="statusText">Esperando archivo...</span>
+            <span id="statusText">Waiting for file...</span>
             <div id="logArea"></div>
-        </div>
-
-        <!-- Área oculta para previsualizar si el script realmente encontró las imágenes -->
-        <div id="preview">
-            <h3>Vista Previa de Extracción (Último Cap.):</h3>
-            <div class="preview-content" id="previewContent"></div>
         </div>
     </div>
 
@@ -98,19 +94,17 @@
         const statusText = document.getElementById('statusText');
         const logArea = document.getElementById('logArea');
         const dropZone = document.getElementById('dropZone');
-        const previewContent = document.getElementById('previewContent');
-        const previewBox = document.getElementById('preview');
 
-        function addLog(msg) {
+        function addLog(msg, type = 'info') {
             const div = document.createElement('div');
             div.className = 'log-entry';
-            div.textContent = msg;
+            if(type === 'warn') div.className += ' log-warn';
+            if(type === 'error') div.className += ' log-error';
+            div.textContent = `> ${msg}`;
             logArea.prepend(div);
-            // Limitar logs
-            if (logArea.children.length > 5) logArea.lastChild.remove();
         }
 
-        // --- FUNCIÓN CLAVE: Convierte cualquier Blob a un JPG Base64 limpio usando Canvas ---
+        // Helper: Convert Blob to JPG Base64 using Canvas (Cleans formatting issues)
         const blobToCleanJpg = (blob) => {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -118,32 +112,22 @@
                 
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    // Usamos las dimensiones naturales
                     canvas.width = img.naturalWidth;
                     canvas.height = img.naturalHeight;
-                    
                     const ctx = canvas.getContext('2d');
-                    // Fondo blanco por si es un PNG transparente (Word odia transparencias a veces)
-                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillStyle = '#FFFFFF'; // White background for transparency
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0);
                     
-                    // Exportar como JPEG calidad 0.8
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85); // 0.85 Quality
                     URL.revokeObjectURL(url);
-                    resolve({ 
-                        dataUrl, 
-                        width: img.naturalWidth, 
-                        height: img.naturalHeight 
-                    });
+                    resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight });
                 };
                 
                 img.onerror = (e) => {
                     URL.revokeObjectURL(url);
-                    reject(new Error("No se pudo decodificar la imagen en Canvas"));
+                    reject(new Error("Image decode failed"));
                 };
-                
                 img.src = url;
             });
         };
@@ -151,15 +135,14 @@
         const processFile = async (file) => {
             if (!file) return;
             logArea.innerHTML = '';
-            previewContent.innerHTML = '';
-            previewBox.style.display = 'block';
-
+            
             if (!file.name.toLowerCase().endsWith('.epub')) {
-                statusText.textContent = "Por favor usa un archivo .epub";
+                addLog("Invalid file type. Please upload an EPUB.", 'error');
                 return;
             }
 
-            statusText.textContent = "Abriendo libro...";
+            statusText.textContent = "Loading EPUB structure...";
+            addLog("Reading file...");
             
             try {
                 const buffer = await file.arrayBuffer();
@@ -171,112 +154,111 @@
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
                     <head>
                         <meta charset='utf-8'>
-                        <title>${book.package.metadata.title || 'Ebook'}</title>
+                        <title>${book.package.metadata.title || 'Document'}</title>
                     </head>
                     <body>
                 `;
 
                 const spine = book.spine;
-                let totalImagesProcessed = 0;
+                
+                // Use the internal Archive directly to avoid browser fetching URLs
+                const archive = book.archive;
 
                 for (let i = 0; i < spine.items.length; i++) {
                     const item = spine.items[i];
-                    statusText.textContent = `Procesando capítulo ${i + 1} de ${spine.items.length}...`;
-                    
-                    try {
-                        const doc = await book.load(item.href);
-                        if (!(doc instanceof Document)) continue;
+                    statusText.textContent = `Processing chapter ${i + 1}/${spine.items.length}...`;
 
-                        // Encontrar imágenes
+                    try {
+                        // CRITICAL CHANGE: Get Raw Text instead of book.load()
+                        // This prevents the browser from parsing the HTML and triggering the 404 GET requests
+                        let rawHtml = await archive.getText(item.href);
+                        
+                        // Parse manually in a detached DOM
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(rawHtml, "text/html");
+
                         const images = Array.from(doc.querySelectorAll('img'));
                         
-                        // Procesar imágenes de este capítulo
+                        if (images.length > 0) {
+                            addLog(`Processing ${images.length} images in Ch ${i+1}...`);
+                        }
+
+                        // Process images
                         for (const img of images) {
                             const src = img.getAttribute('src');
                             if (!src) continue;
 
                             try {
+                                // Resolve path relative to the specific chapter file
                                 const absolutePath = book.path.resolve(src, item.href);
-                                const imageBlob = await book.archive.getBlob(absolutePath);
+                                
+                                // Fetch Blob from Zip
+                                const imageBlob = await archive.getBlob(absolutePath);
 
                                 if (imageBlob) {
-                                    addLog(`Img encontrada: ${src.substring(0, 20)}...`);
-                                    
-                                    // 1. Convertir a JPG limpio
+                                    // Convert to Base64 (JPG)
                                     const { dataUrl, width, height } = await blobToCleanJpg(imageBlob);
                                     
-                                    // 2. Reemplazar SRC
+                                    // Swap SRC
                                     img.setAttribute('src', dataUrl);
                                     
-                                    // 3. FIX CRÍTICO: Establecer width/height explícitos para Word
-                                    // Si es muy grande, lo limitamos
-                                    let finalWidth = width;
-                                    let finalHeight = height;
-                                    
-                                    if (width > 600) {
-                                        const ratio = 600 / width;
-                                        finalWidth = 600;
-                                        finalHeight = Math.round(height * ratio);
+                                    // Fix dimensions for Word
+                                    let w = width;
+                                    let h = height;
+                                    if(w > 600) {
+                                        const r = 600 / w;
+                                        w = 600;
+                                        h = Math.round(h * r);
                                     }
-
-                                    img.setAttribute('width', finalWidth);
-                                    img.setAttribute('height', finalHeight);
-                                    
-                                    // Estilo inline como respaldo
-                                    img.style.width = finalWidth + 'px';
-                                    img.style.height = 'auto';
-
-                                    totalImagesProcessed++;
+                                    img.setAttribute('width', w);
+                                    img.setAttribute('height', h);
+                                    img.style.width = w + "px";
+                                    img.style.height = "auto";
                                 } else {
-                                    addLog(`⚠️ Blob vacío para: ${absolutePath}`);
+                                    addLog(`Missing blob: ${src}`, 'warn');
                                 }
-                            } catch (imgErr) {
-                                console.warn("Error img", imgErr);
-                                addLog(`❌ Error procesando img: ${src}`);
+                            } catch (e) {
+                                addLog(`Failed img: ${src}`, 'warn');
                             }
                         }
 
-                        // Serializar HTML limpio
+                        // Serialize back to string
                         const serializer = new XMLSerializer();
                         let bodyContent = serializer.serializeToString(doc.body);
                         
-                        // Limpiar tags body para concatenar
+                        // Strip body tags
                         bodyContent = bodyContent.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '');
                         
                         fullHtml += bodyContent;
                         fullHtml += '<br style="page-break-after: always;" />';
 
-                        // Actualizar vista previa (solo el último capítulo procesado para no saturar)
-                        if (images.length > 0) {
-                            previewContent.innerHTML = `<b>Capítulo ${i+1}:</b><br>` + bodyContent;
-                        }
-
                     } catch (e) {
-                        console.error(e);
+                        addLog(`Error in Ch ${i+1}: ${e.message}`, 'error');
                     }
                 }
 
                 fullHtml += "</body></html>";
 
-                statusText.textContent = `Generando DOCX (${totalImagesProcessed} imágenes procesadas)...`;
+                statusText.textContent = "Generating DOCX file...";
                 
-                // Pequeña pausa para que el UI se actualice
-                await new Promise(r => setTimeout(r, 500));
+                // Allow UI update
+                await new Promise(r => setTimeout(r, 200));
 
                 const converted = htmlDocx.asBlob(fullHtml, {
                     orientation: 'portrait',
                     margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 }
                 });
 
-                const filename = (book.package.metadata.title || "ebook_convertido") + ".docx";
-                saveAs(converted, filename);
+                const safeTitle = (book.package.metadata.title || "ebook").replace(/[^a-z0-9]/gi, '_');
+                saveAs(converted, `${safeTitle}.docx`);
                 
-                statusText.textContent = "¡Descarga lista! Revisa tu carpeta.";
-                addLog("Proceso finalizado con éxito.");
+                statusText.textContent = "Done! Download started.";
+                addLog("Conversion complete.");
 
             } catch (err) {
                 console.error(err);
-                statusText.textContent = "Error General: " + err.message;
+                statusText.textContent = "Critical Error: " + err.message;
+                addLog(err.message, 'error');
             } finally {
                 fileInput.value = '';
             }
@@ -285,7 +267,6 @@
         // Event Listeners
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         dropZone.addEventListener('click', () => fileInput.click());
-        
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
         });
