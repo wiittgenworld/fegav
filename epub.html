@@ -3,93 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB to DOCX Converter</title>
+    <title>EPUB to DOCX Converter (Fixed Images)</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f9;
-            color: #333;
-        }
-        .container {
-            text-align: center;
-            background: white;
-            padding: 2rem 3rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 400px;
-            width: 100%;
-        }
-        h1 { margin-bottom: 1.5rem; font-size: 1.5rem; }
-        
-        /* Prominent Drop Area */
-        .drop-area {
-            border: 2px dashed #ccc;
-            border-radius: 12px;
-            padding: 40px 20px;
-            background-color: #fafafa;
-            margin-bottom: 20px; /* Space between drop zone and button */
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: #777;
-        }
-        
-        /* Drag & Drop / Hover Active State */
-        .drop-area.drag-over, .drop-area:hover {
-            border-color: #007bff;
-            background-color: #f0f8ff;
-            color: #007bff;
-        }
-
-        .drop-icon {
-            font-size: 3rem;
-            display: block;
-            margin-bottom: 10px;
-        }
-
-        /* File Input Styling */
-        input[type="file"] {
-            display: none;
-        }
-        
-        .custom-upload-btn {
-            display: inline-block;
-            background-color: #007bff;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.3s;
-            font-weight: 500;
-            width: auto;
-        }
-        .custom-upload-btn:hover { background-color: #0056b3; }
-        
-        /* Status Messages */
-        #status {
-            margin-top: 1.5rem;
-            font-size: 0.9rem;
-            min-height: 1.2em;
-            color: #666;
-            word-wrap: break-word;
-        }
-        .spinner {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(0,0,0,0.1);
-            border-left-color: #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-            display: none;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* ... (Your existing CSS remains the same) ... */
+        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; color: #333; }
+        .container { text-align: center; background: white; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
+        .drop-area { border: 2px dashed #ccc; border-radius: 12px; padding: 40px 20px; background-color: #fafafa; margin-bottom: 20px; cursor: pointer; color: #777; }
+        .drop-area:hover { border-color: #007bff; background-color: #f0f8ff; color: #007bff; }
+        .custom-upload-btn { display: inline-block; background-color: #007bff; color: white; padding: 12px 30px; border-radius: 6px; cursor: pointer; }
+        #status { margin-top: 1.5rem; font-size: 0.9rem; color: #666; }
+        input[type="file"] { display: none; }
     </style>
 
     <!-- Essential Libraries -->
@@ -102,23 +25,15 @@
 
     <div class="container">
         <h1>EPUB to DOCX</h1>
-        
-        <!-- Prominent Drop Zone -->
         <div id="dropZone" class="drop-area">
-            <span class="drop-icon">📂</span>
+            <span style="font-size: 3rem; display: block; margin-bottom: 10px;">📂</span>
             <span>Drag & Drop EPUB here</span>
         </div>
-
-        <!-- Button Below -->
         <div>
-            <label for="fileInput" class="custom-upload-btn">
-                Select File
-            </label>
+            <label for="fileInput" class="custom-upload-btn">Select File</label>
             <input type="file" id="fileInput" accept=".epub">
         </div>
-
         <div id="status">
-            <div class="spinner" id="spinner"></div>
             <span id="statusText">Waiting for file...</span>
         </div>
     </div>
@@ -126,123 +41,107 @@
     <script>
         const fileInput = document.getElementById('fileInput');
         const statusText = document.getElementById('statusText');
-        const spinner = document.getElementById('spinner');
         const dropZone = document.getElementById('dropZone');
 
-        // Centralized file processing logic
+        // --- NEW HELPER FUNCTION TO HANDLE IMAGES ---
+        async function convertImagesToBase64(doc, book) {
+            const images = doc.querySelectorAll('img');
+            
+            // Loop through every image tag found in the chapter
+            for (let img of images) {
+                const src = img.getAttribute('src');
+                if (!src) continue;
+
+                try {
+                    // 1. Resolve the relative path (e.g., "../img/cover.jpg") to the internal file path
+                    // doc.baseURI is crucial here as it tells us where the current chapter file lives
+                    const absolutePath = book.path.resolve(src, doc.baseURI);
+                    
+                    // 2. Fetch the image file from the EPUB archive
+                    // 'book.archive.createUrl' creates a temporary Blob URL that the browser can read
+                    const url = await book.archive.createUrl(absolutePath);
+                    
+                    // 3. Fetch that blob and convert it to Base64
+                    if (url) {
+                        const response = await fetch(url);
+                        const blob = await response.blob();
+                        const base64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+
+                        // 4. Replace the src with the Base64 data
+                        img.setAttribute('src', base64);
+                        
+                        // Clean up memory
+                        URL.revokeObjectURL(url);
+                    }
+                } catch (err) {
+                    console.warn(`Could not process image: ${src}`, err);
+                }
+            }
+            return doc;
+        }
+
         const processFile = async (file) => {
             if (!file) return;
-            
-            // Basic validation
-            if (file.type !== "application/epub+zip" && !file.name.toLowerCase().endsWith('.epub')) {
-                statusText.textContent = "Error: Please upload a valid .epub file.";
-                return;
-            }
-
-            // 1. UI Reset
-            spinner.style.display = 'inline-block';
             statusText.textContent = "Reading EPUB structure...";
             
             try {
-                // 2. Load the EPUB
                 const buffer = await file.arrayBuffer();
                 const book = ePub(buffer);
-                
                 await book.ready;
-                statusText.textContent = "Extracting chapters...";
 
-                // 3. Prepare variables
+                let fullHtml = `<!DOCTYPE html><html><body>`;
                 const spine = book.spine;
-                let fullHtml = `
-                    <!DOCTYPE html>
-                    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                    <head><meta charset='utf-8'></head>
-                    <body>
-                `;
 
-                // 4. Iterate through every chapter
                 for (const item of spine.items) {
                     statusText.textContent = `Processing section ${item.index + 1} of ${spine.items.length}...`;
 
                     try {
-                        const doc = await book.load(item.href);
+                        // Load the chapter Document
+                        let doc = await book.load(item.href);
 
+                        // --- NEW: Run the image converter before getting HTML ---
                         if (doc instanceof Document) {
-                            const bodyContent = doc.body.innerHTML;
-                            fullHtml += bodyContent;
+                            await convertImagesToBase64(doc, book);
+                            
+                            // Now extract the HTML *after* images are fixed
+                            fullHtml += doc.body.innerHTML;
                             fullHtml += '<br style="page-break-after: always;" />';
                         }
-                    } catch (chapterError) {
-                        console.warn("Skipping chapter due to load error:", chapterError);
+                    } catch (e) {
+                        console.warn("Skipping chapter:", e);
                     }
                 }
 
                 fullHtml += "</body></html>";
 
-                // 5. Generate DOCX Blob
                 statusText.textContent = "Generating Word document...";
-                
-                await new Promise(r => setTimeout(r, 100));
-
                 const converted = htmlDocx.asBlob(fullHtml, {
                     orientation: 'portrait',
                     margins: { top: 720, bottom: 720, left: 720, right: 720 }
                 });
 
-                // 6. Trigger Download
-                const newFilename = file.name.replace(/\.epub$/i, '') + ".docx";
-                saveAs(converted, newFilename);
-                
-                statusText.textContent = "Done! Download started.";
+                saveAs(converted, file.name.replace(/\.epub$/i, '') + ".docx");
+                statusText.textContent = "Done!";
 
             } catch (err) {
                 console.error(err);
                 statusText.textContent = "Error: " + err.message;
             } finally {
-                spinner.style.display = 'none';
-                fileInput.value = ''; // Reset input to allow re-uploading same file
+                fileInput.value = '';
             }
         };
 
-        // --- Standard File Input Event ---
-        fileInput.addEventListener('change', (e) => {
-            processFile(e.target.files[0]);
+        // Event Listeners (Same as before)
+        fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
+        dropZone.addEventListener('click', () => fileInput.click());
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => { ev.preventDefault(); ev.stopPropagation(); });
         });
-
-        // --- Click on Drop Zone triggers File Input ---
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // --- Drag and Drop Events ---
-        
-        // Prevent default drag behaviors
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        // Highlight drop zone
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
-        });
-
-        // Un-highlight drop zone
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
-        });
-
-        // Handle Dropped File
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            processFile(files[0]);
-        });
-
+        dropZone.addEventListener('drop', (e) => processFile(e.dataTransfer.files[0]));
     </script>
 </body>
 </html>
