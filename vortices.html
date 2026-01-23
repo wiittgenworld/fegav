@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, =initial-scale=1.0">
+    <title>Vórtices con Rebote en los Borde</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #canvas {
+            background-color: #0f3460;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            border: 1px solid #e94560;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background-color: #ff6b81;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
+        }
+        
+        .info {
+            max-width: 600px;
+            text-align: center;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            width: 300px;
+            gap: 10px;
+        }
+        
+        .slider-container label {
+            min-width: 120px;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 5px;
+            background: #e94560;
+            outline: none;
+            border-radius: 5px;
+        }
+        
+        .particles {
+            display: flex;
+            justify-content: center;
+            margin-top: 15px;
+            gap: 10px;
+        }
+        
+        .particle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e94560;
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.7);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(233, 69, 96, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); }
+        }
+        
+        .code {
+            font-family: monospace;
+            background-color: #0f3460;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-width: 600px;
+            text-align: left;
+            border-left: 3px solid #e94560;
+        }
+        
+        .highlight {
+            color: #e94560;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vórtices con Rebote en los Borde</h1>
+    
+    <div class="container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+        
+        <div class="controls">
+            <button id="addVortex">Agregar Vórtice</button>
+            <button id="clearAll">Limpiar Todo</button>
+            
+            <div class="slider-container">
+                <label for="particleCount">Partículas por Vórtice:</label>
+                <input type="range" id="particleCount" min="50" max="200" value="100">
+            </div>
+        </div>
+        
+        <div class="info">
+            <p>Cada vórtice está compuesto por partículas que giran alrededor de su centro.</p>
+            <p>Los vórtices rebotan en los bordes del canvas.</p>
+            <p>Usa el botón "Agregar Vórtice" para añadir más partículas a la simulación.</p>
+        </div>
+        
+        <div class="particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+        
+        <div class="code">
+            <p><span class="highlight">// Código JavaScript</span></p>
+            <p>let numStars = 5; // número de vórtices</p>
+            <p>let pointsPerStar = 100; // partículas por vórtice</p>
+            <p>let stars = [];</p>
+            <p>let params = { c_rep: 1.0, dt: 0.1 };</p>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let canvas, ctx;
+        let stars = [];
+        let params = { c_rep: 1.0, dt: 0.1 };
+        let particleCount = 100;
+        
+        // Colores de los vórtices
+        const colors = [
+            '#FF5252', // rojo
+            '#4CAF50', // verde
+            '#2196F3', // azul
+            '#FFEB3B', // amarillo
+            '#E91E63', // rosa
+            '#9C27B0', // morado
+            '#00BCD4', // cian
+            '#FF9800', // naranja
+            '#795548', // marrón
+            '#607D8B'  // gris
+        ];
+        
+        // Inicialización
+        window.onload = function() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Actualizar el rango de partículas
+            document.getElementById('particleCount').addEventListener('input', function() {
+                particleCount = parseInt(this.value);
+            });
+            
+            // Eventos de botones
+            document.getElementById('addVortex').addEventListener('click', addVortex);
+            document.getElementById('clearAll').addEventListener('click', clearAll);
+            
+            // Iniciar la simulación
+            init();
+            animate();
+        };
+        
+        function init() {
+            // Inicializar vórtices
+            for (let s = 0; s < 5; s++) {
+                addVortex();
+            }
+        }
+        
+        function addVortex() {
+            // Crear un nuevo vórtice con posición aleatoria
+            let star = {
+                px: Math.random() * canvas.width,
+                py: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                points: [], // Posiciones relativas al centro
+                angles: [], // Ángulo actual de cada partícula
+                speeds: [], // Velocidad angular
+                col: colors[Math.floor(Math.random() * colors.length)]
+            };
+            
+            // Inicializar puntos del vórtice
+            for (let i = 0; i < particleCount; i++) {
+                let radius = 20 + Math.random() * 40;
+                let angle = Math.random() * TWO_PI;
+                let speed = 0.01 + Math.random() * 0.03;
+                
+                star.points[i] = radius;
+                star.angles[i] = angle;
+                star.speeds[i] = speed;
+            }
+            
+            stars.push(star);
+        }
+        
+        function clearAll() {
+            stars = [];
+            draw();
+        }
+        
+        function draw() {
+            // Limpiar el canvas
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Dibujar partículas y vórtices
+            for (let star of stars) {
+                // Mover el centro del vórtice y rebotar contra bordes
+                star.px += star.vx;
+                star.py += star.vy;
+                
+                // Rebote en los bordes
+                if (star.px < 0 || star.px > canvas.width) {
+                    star.vx *= -1;
+                    // Cambiar color aleatoriamente al rebotar
+                    star.col = colors[Math.floor(Math.random() * colors.length)];
+                }
+                
+                if (star.py < 0 || star.py > canvas.height) {
+                    star.vy *= -1;
+                    // Cambiar color aleatoriamente al rebotar
+                    star.col = colors[Math.floor(Math.random() * colors.length)];
+                }
+                
+                // Dibujar partículas girando en vórtice
+                for (let i = 0; i < particleCount; i++) {
+                    // Actualizar ángulo
+                    star.angles[i] += star.speeds[i];
+                    
+                    // Calcular posición
+                    let x = star.px + cos(star.angles[i]) * star.points[i];
+                    let y = star.py + sin(star.angles[i]) * star.points[i];
+                    
+                    // Dibujar partícula
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(star.angles[i]);
+                    
+                    // Crear efecto de partícula con sombra
+                    ctx.shadowColor = star.col;
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = star.col;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 3, 0, TWO_PI);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+        
+        function animate() {
+            draw();
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
