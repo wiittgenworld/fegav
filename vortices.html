@@ -1,306 +1,288 @@
+
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, =initial-scale=1.0">
-    <title>Vórtices con Rebote en los Borde</title>
+    <meta name="viewport" content="width=device-width, <initial-scale=1.0">
+    <title>Fluid Dynamics Vortices Simulation</title>
     <style>
         body {
             margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background-color: #1a1a2e;
-            color: white;
+            padding: 0;
+            overflow: hidden;
+            background-color: #0a0a1a;
             font-family: Arial, sans-serif;
-            overflow-x: hidden;
+            color: #e0e0ff;
         }
-        
-        h1 {
-            margin-bottom: 20px;
-            text-align: center;
-            color: #e94560;
-            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        canvas {
+            display: block;
         }
-        
-        .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        
-        #canvas {
-            background-color: #0f3460;
-            border-radius: 12px;
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
-            margin-bottom: 20px;
-            border: 1px solid #e94560;
-        }
-        
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        button {
-            padding: 10px 20px;
-            background-color: #e94560;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-        
-        button:hover {
-            background-color: #ff6b81;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
-        }
-        
         .info {
-            max-width: 600px;
-            text-align: center;
-            margin-top: 20px;
-            line-height: 1.6;
-        }
-        
-        .slider-container {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-            width: 300px;
-            gap: 10px;
-        }
-        
-        .slider-container label {
-            min-width: 120px;
-        }
-        
-        input[type="range"] {
-            flex: 1;
-            height: 5px;
-            background: #e94560;
-            outline: none;
-            border-radius: 5px;
-        }
-        
-        .particles {
-            display: flex;
-            justify-content: center;
-            margin-top: 15px;
-            gap: 10px;
-        }
-        
-        .particle {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: #e94560;
-            box-shadow: 0 0 10px rgba(233, 69, 96, 0.7);
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7); }
-            70% { box-shadow: 0 0 0 8px rgba(233, 69, 96, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); }
-        }
-        
-        .code {
-            font-family: monospace;
-            background-color: #0f3460;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
             padding: 15px;
-            border-radius: 5px;
-            margin-top: 20px;
-            max-width: 600px;
-            text-align: left;
-            border-left: 3px solid #e94560;
+            border-radius: 8px;
+            max-width: 300px;
         }
-        
-        .highlight {
-            color: #e94560;
-            font-weight: bold;
+        h1 {
+            margin-top: 0;
+            font-size: 1.5em;
+            color: #4db8ff;
+        }
+        p {
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: #4db8ff;
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #6be2ff;
         }
     </style>
 </head>
 <body>
-    <h1>Vórtices con Rebote en los Borde</h1>
+    <canvas id="canvas"></canvas>
     
-    <div class="container">
-        <canvas id="canvas" width="800" height="600"></canvas>
-        
-        <div class="controls">
-            <button id="addVortex">Agregar Vórtice</button>
-            <button id="clearAll">Limpiar Todo</button>
-            
-            <div class="slider-container">
-                <label for="particleCount">Partículas por Vórtice:</label>
-                <input type="range" id="particleCount" min="50" max="200" value="100">
-            </div>
-        </div>
-        
-        <div class="info">
-            <p>Cada vórtice está compuesto por partículas que giran alrededor de su centro.</p>
-            <p>Los vórtices rebotan en los bordes del canvas.</p>
-            <p>Usa el botón "Agregar Vórtice" para añadir más partículas a la simulación.</p>
-        </div>
-        
-        <div class="particles">
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-        </div>
-        
-        <div class="code">
-            <p><span class="highlight">// Código JavaScript</span></p>
-            <p>let numStars = 5; // número de vórtices</p>
-            <p>let pointsPerStar = 100; // partículas por vórtice</p>
-            <p>let stars = [];</p>
-            <p>let params = { c_rep: 1.0, dt: 0.1 };</p>
-        </div>
+    <div class="info">
+        <h1>Fluid Dynamics Vortices Simulation</h1>
+        <p>This simulation demonstrates fluid vortices in a 2D environment. The blue particles represent fluid particles moving in a vortex pattern.</p>
+    </div>
+    
+    <div class="controls">
+        <button id="resetBtn">Reset</button>
+        <button id="pauseBtn">Pause</button>
     </div>
 
     <script>
-        // Variables globales
-        let canvas, ctx;
-        let stars = [];
-        let params = { c_rep: 1.0, dt: 0.1 };
-        let particleCount = 100;
-        const TWO_PI = 2 * Math.PI;
-        // Colores de los vórtices
-        const colors = [
-            '#FF5252', // rojo
-            '#4CAF50', // verde
-            '#2196F3', // azul
-            '#FFEB3B', // amarillo
-            '#E91E63', // rosa
-            '#9C27B0', // morado
-            '#00BCD4', // cian
-            '#FF9800', // naranja
-            '#795548', // marrón
-            '#607D8B'  // gris
-        ];
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
         
-        // Inicialización
-        window.onload = function() {
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
-            
-            // Actualizar el rango de partículas
-            document.getElementById('particleCount').addEventListener('input', function() {
-                particleCount = parseInt(this.value);
-            });
-            
-            // Eventos de botones
-            document.getElementById('addVortex').addEventListener('click', addVortex);
-            document.getElementById('clearAll').addEventListener('click', clearAll);
-            
-            // Iniciar la simulación
-            init();
-            animate();
+        // Configuration
+        const config = {
+            particleCount: 100,
+            vortexCount: 5,
+            vortexRadius: 120,
+            vortexStrength: 0.02,
+            particleSize: 3,
+            particleSpeed: 0.5,
+            maxParticles: 200,
+            isPaused: false
         };
         
-        function init() {
-            // Inicializar vórtices
-            for (let s = 0; s < 5; s++) {
-                addVortex();
+        // Classes
+        class Particle {
+            constructor(x, y, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.rotation = 0;
+            }
+            
+            update(vortexX, vortexY, vortexStrength, time) {
+                // Calculate distance from vortex center
+                const dx = vortexX - this.x;
+                const dy = vortexY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Calculate vortex force (inverse square law)
+                const force = vortexStrength * (config.vortexStrength / (distance + 1));
+                
+                // Calculate angle from vortex center
+                const angle = Math.atan2(dy, dx);
+                
+                // Update velocity based on vortex force
+                this.velocityX = Math.cos(angle) * force;
+                this.velocityY = Math.sin(angle) * force;
+                
+                // Update position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+                
+                // Boundary collision (bounce off edges)
+                if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+                    this.velocityX = -this.velocityX;
+                }
+                if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
+                    this.velocityY = -this.velocityY;
+                }
+            }
+            
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
             }
         }
         
-        function addVortex() {
-            // Crear un nuevo vórtice con posición aleatoria
-            let star = {
-                px: Math.random() * canvas.width,
-                py: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 2,
-                vy: (Math.random() - 0.5) * 2,
-                points: [], // Posiciones relativas al centro
-                angles: [], // Ángulo actual de cada partícula
-                speeds: [], // Velocidad angular
-                col: colors[Math.floor(Math.random() * colors.length)]
-            };
-            
-            // Inicializar puntos del vórtice
-            for (let i = 0; i < particleCount; i++) {
-                let radius = 20 + Math.random() * 40;
-                let angle = Math.random() * TWO_PI;
-                let speed = 0.01 + Math.random() * 0.03;
-                
-                star.points[i] = radius;
-                star.angles[i] = angle;
-                star.speeds[i] = speed;
+        class Vortex {
+            constructor(x, y, radius, strength, particles) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.strength = strength;
+                this.particles = particles;
             }
             
-            stars.push(star);
-        }
-        
-        function clearAll() {
-            stars = [];
-            draw();
-        }
-        
-        function draw() {
-            // Limpiar el canvas
-            ctx.fillStyle = '#0f3460';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            spawnParticles() {
+                // Create particles for this vortex
+                for (let i = 0; i < config.particleCount; i++) {
+                    // Create particles around the vortex center
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * config.vortexRadius;
+                    const x = this.x + Math.cos(angle) * distance;
+                    const y = this.y + Math.sin(angle) * distance;
+                    
+                    // Create a particle with a slight offset to avoid perfect overlap
+                    const offset = Math.random() * 10 - 5;
+                    const particleX = x + offset;
+                    const particleY = y + offset;
+                    
+                    // Create particle
+                    const particle = new Particle(
+                        particleX, 
+                        particleY, 
+                        config.particleSize, 
+                        `rgba(${Math.random() * 100 + 155}, ${Math.random() * 100 + 155}, 255, ${Math.random() * 0.5 + 0.5})`
+                    );
+                    
+                    // Store particle in the vortex
+                    this.particles.push(particle);
+                }
+            }
             
-            // Dibujar partículas y vórtices
-            for (let star of stars) {
-                // Mover el centro del vórtice y rebotar contra bordes
-                star.px += star.vx;
-                star.py += star.vy;
-                
-                // Rebote en los bordes
-                if (star.px < 0 || star.px > canvas.width) {
-                    star.vx *= -1;
-                    // Cambiar color aleatoriamente al rebotar
-                    star.col = colors[Math.floor(Math.random() * colors.length)];
-                }
-                
-                if (star.py < 0 || star.py > canvas.height) {
-                    star.vy *= -1;
-                    // Cambiar color aleatoriamente al rebotar
-                    star.col = colors[Math.floor(Math.random() * colors.length)];
-                }
-                
-                // Dibujar partículas girando en vórtice
-                for (let i = 0; i < particleCount; i++) {
-                    // Actualizar ángulo
-                    star.angles[i] += star.speeds[i];
-                    
-                    // Calcular posición
-                    let x = star.px + cos(star.angles[i]) * star.points[i];
-                    let y = star.py + sin(star.angles[i]) * star.points[i];
-                    
-                    // Dibujar partícula
-                    ctx.save();
-                    ctx.translate(x, y);
-                    ctx.rotate(star.angles[i]);
-                    
-                    // Crear efecto de partícula con sombra
-                    ctx.shadowColor = star.col;
-                    ctx.shadowBlur = 15;
-                    ctx.fillStyle = star.col;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, 3, 0, TWO_PI);
-                    ctx.fill();
-                    ctx.restore();
-                }
+            update(time) {
+                // Update all particles in this vortex
+                this.particles.forEach(particle => {
+                    particle.update(this.x, this.y, this.strength, time);
+                });
+            }
+            
+            draw() {
+                // Draw vortex center
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#4db8ff';
+                ctx.fill();
+                ctx.closePath();
             }
         }
         
-        function animate() {
-            draw();
-            requestAnimationFrame(animate);
+        // Initialize particles array
+        let particles = [];
+        
+        // Initialize vortices
+        function createVortices() {
+            particles = [];
+            const vortices = [];
+            
+            // Create vortex positions
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const vortexPositions = [];
+            
+            for (let i = 0; i < config.vortexCount; i++) {
+                // Distribute vortices in a circular pattern
+                const angle = (i / config.vortexCount) * Math.PI * 2;
+                const distance = Math.min(config.vortexCount, 10) * 60;
+                const x = centerX + Math.cos(angle) * distance;
+                const y = centerY + Math.sin(angle) * distance;
+                
+                vortexPositions.push({x, y});
+            }
+            
+            // Create vortices and particles
+            vortexPositions.forEach(pos => {
+                const vortex = new Vortex(
+                    pos.x, 
+                    pos.y, 
+                    config.vortexRadius, 
+                    config.vortexStrength, 
+                    particles
+                );
+                vortex.spawnParticles();
+                vortices.push(vortex);
+            });
+            
+            return vortices;
         }
+        
+        // Animation
+        let animationId;
+        let startTime = Date.now();
+        let vortices = createVortices();
+        
+        function animate(time) {
+            if (!config.isPaused) {
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Update vortices
+                vortices.forEach(vortex => {
+                    vortex.update(time);
+                    vortex.draw();
+                });
+                
+                // Draw particles
+                particles.forEach(particle => {
+                    particle.draw();
+                });
+                
+                // Request next frame
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+        
+        // Start animation
+        animate();
+        
+        // Controls
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            vortices = createVortices();
+            startTime = Date.now();
+        });
+        
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            config.isPaused = !config.isPaused;
+            if (!config.isPaused) {
+                startTime += Date.now() - animationId;
+                animationId = requestAnimationFrame(animate);
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
     </script>
 </body>
 </html>
